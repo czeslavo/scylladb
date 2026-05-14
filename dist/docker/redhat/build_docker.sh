@@ -97,9 +97,13 @@ bcp LICENSE-ScyllaDB-Source-Available.md /licenses/
 
 run microdnf clean all
 run microdnf --setopt=tsflags=nodocs -y update
-run microdnf --setopt=tsflags=nodocs -y install hostname kmod procps-ng python3 python3-pip cpio
-# Extract only systemctl binary from systemd package to avoid installing the whole systemd in the container.
-run bash -rc "microdnf download systemd && rpm2cpio systemd-*.rpm | cpio -idmv ./usr/bin/systemctl && rm -rf systemd-*.rpm"
+run microdnf --setopt=tsflags=nodocs -y install hostname kmod procps-ng python3 python3-pip cpio kmod-libs pam libseccomp
+# Extract systemctl and its private shared library from the systemd package.
+# We pin the architecture to avoid extracting a 32-bit binary on a 64-bit image
+# (microdnf download systemd fetches both i686 and x86_64 RPMs).
+# We also need to install kmod-libs, pam, and libseccomp as they are runtime
+# dependencies of libsystemd-shared that are not present in the base image.
+run bash -rc "microdnf download systemd.\$(uname -m) && rpm2cpio systemd-*.\$(uname -m).rpm | cpio -idmv ./usr/bin/systemctl './usr/lib64/systemd/libsystemd-shared-*.so' && rm -rf systemd-*.rpm"
 run curl -L --output /etc/yum.repos.d/scylla.repo ${repo_file_url}
 run pip3 install --no-cache-dir --prefix /usr supervisor
 run bash -ec "echo LANG=C.UTF-8 > /etc/locale.conf"
